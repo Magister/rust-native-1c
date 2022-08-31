@@ -12,3 +12,4 @@ native_macro = { path = "./macros" }
 derivative = "2.2.0"
 lazy_static = "1.4.0"
 libc = "0.2.126"
+chrono = "0.4"
