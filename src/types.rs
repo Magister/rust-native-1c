@@ -1,5 +1,6 @@
-use std::os::raw::{c_long, c_float, c_double};
+use std::{os::raw::{c_long, c_float, c_double, c_int}, time::SystemTime, ptr::null_mut};
 
+use chrono::{NaiveDateTime, Timelike, Datelike, DateTime, Local};
 use libc::{tm, c_char};
 use crate::component::IComponentInit;
 
@@ -72,6 +73,60 @@ pub struct Variant {
 }
 
 impl Variant {
+    pub fn is_empty(&self) -> bool {
+        match self.vt {
+            VariableType::VTYPE_EMPTY => true,
+            _ => false
+        }
+    }
+
+    pub fn is_string(&self) -> bool {
+        match self.vt {
+            VariableType::VTYPE_PWSTR
+            | VariableType::VTYPE_PSTR => true,
+            _ => false
+        }
+    }
+
+    pub fn is_blob(&self) -> bool {
+        match self.vt {
+            VariableType::VTYPE_BLOB => true,
+            _ => false
+        }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        match self.vt {
+            VariableType::VTYPE_BOOL => true,
+            _ => false
+        }
+    }
+
+    pub fn is_number(&self) -> bool {
+        match self.vt {
+            VariableType::VTYPE_I1
+            | VariableType::VTYPE_I2
+            | VariableType::VTYPE_I4
+            | VariableType::VTYPE_I8
+            | VariableType::VTYPE_INT
+            | VariableType::VTYPE_UI1
+            | VariableType::VTYPE_UI2
+            | VariableType::VTYPE_UI4
+            | VariableType::VTYPE_UI8
+            | VariableType::VTYPE_UINT
+            | VariableType::VTYPE_R4
+            | VariableType::VTYPE_R8 => true,
+            _ => false
+        }
+    }
+
+    pub fn is_date(&self) -> bool {
+        match self.vt {
+            VariableType::VTYPE_TM => true,
+            _ => false
+        }
+    }
+
     pub fn as_string(&self) -> Option<String> {
         match self.vt {
             VariableType::VTYPE_PWSTR => {
@@ -274,6 +329,29 @@ impl Variant {
         }
     }
 
+    pub fn as_date(&self) -> Option<SystemTime> {
+        match self.vt {
+            VariableType::VTYPE_TM => {
+                let date = unsafe { chrono::NaiveDate::from_yo_opt(self.value.tm_val.tm_year, self.value.tm_val.tm_yday as u32) };
+                let time = unsafe { chrono::NaiveTime::from_hms_opt(self.value.tm_val.tm_hour as u32, self.value.tm_val.tm_min as u32, self.value.tm_val.tm_sec as u32) };
+                if date.is_some() && time.is_some() {
+                    match chrono::NaiveDateTime::new(date.unwrap(), time.unwrap()).and_local_timezone(chrono::Utc).single() {
+                        Some(x) => Some(x.into()),
+                        None => None
+                    }
+                } else {
+                    None
+                }
+            },
+            // maybe we also should handle VariableType::VTYPE_DATE
+            // but I really don't think it's used somewhere because it's a quite weird type:
+            // * The DATE type is implemented using an 8-byte floating-point number.
+            // * Days are represented by whole number increments starting with 30 December 1899, midnight as time zero.
+            // * Hour values are expressed as the absolute value of the fractional part of the number
+            _ => None,
+
+        }
+    }
     pub fn empty() -> Variant {
         Variant {
             value: VariantUnion { i8val: 0 },
@@ -307,6 +385,61 @@ impl Variant {
         }
     }
 
+}
+
+impl From<NaiveDateTime> for Variant {
+    fn from(value: NaiveDateTime) -> Self {
+        Self {
+            value: VariantUnion {
+                tm_val: tm {
+                    tm_sec: value.time().second() as c_int,
+                    tm_min: value.time().minute() as c_int,
+                    tm_hour: value.time().hour() as c_int,
+                    tm_mday: value.date().day() as c_int,
+                    tm_mon: value.date().month0() as c_int,
+                    tm_year: value.date().year() - 1900 as c_int,
+                    tm_wday: value.date().weekday().num_days_from_sunday() as c_int,
+                    tm_yday: value.date().ordinal0() as c_int,
+                    tm_isdst: 0,
+                    tm_gmtoff: value.and_local_timezone(Local).single().unwrap_or_default().offset().local_minus_utc() as c_long,
+                    tm_zone: null_mut(),
+                }
+            },
+            cb_elements: 0,
+            vt: VariableType::VTYPE_TM
+        }
+    }
+}
+
+impl From<DateTime<Local>> for Variant {
+    fn from(value: DateTime<Local>) -> Self {
+        Self {
+            value: VariantUnion {
+                tm_val: tm {
+                    tm_sec: value.time().second() as c_int,
+                    tm_min: value.time().minute() as c_int,
+                    tm_hour: value.time().hour() as c_int,
+                    tm_mday: value.date().day() as c_int,
+                    tm_mon: value.date().month0() as c_int,
+                    tm_year: value.date().year() - 1900 as c_int,
+                    tm_wday: value.date().weekday().num_days_from_sunday() as c_int,
+                    tm_yday: value.date().ordinal0() as c_int,
+                    tm_isdst: 0,
+                    tm_gmtoff: value.offset().local_minus_utc() as c_long,
+                    tm_zone: null_mut(),
+                }
+            },
+            cb_elements: 0,
+            vt: VariableType::VTYPE_TM
+        }
+    }
+}
+
+impl From<SystemTime> for Variant {
+    fn from(value: SystemTime) -> Self {
+        let datetime: DateTime<Local> = value.into();
+        Variant::from(datetime.naive_local())
+    }
 }
 
 macro_rules! variant_from {
