@@ -401,7 +401,9 @@ impl From<NaiveDateTime> for Variant {
                     tm_wday: value.date().weekday().num_days_from_sunday() as c_int,
                     tm_yday: value.date().ordinal0() as c_int,
                     tm_isdst: 0,
-                    tm_gmtoff: value.and_local_timezone(Local).single().unwrap_or_default().offset().local_minus_utc() as c_long,
+                    #[cfg(unix)]
+                    tm_gmtoff: 0,
+                    #[cfg(unix)]
                     tm_zone: null_mut(),
                 }
             },
@@ -425,7 +427,9 @@ impl From<DateTime<Local>> for Variant {
                     tm_wday: value.date().weekday().num_days_from_sunday() as c_int,
                     tm_yday: value.date().ordinal0() as c_int,
                     tm_isdst: 0,
-                    tm_gmtoff: value.offset().local_minus_utc() as c_long,
+                    #[cfg(unix)]
+                    tm_gmtoff: 0,
+                    #[cfg(unix)]
                     tm_zone: null_mut(),
                 }
             },
