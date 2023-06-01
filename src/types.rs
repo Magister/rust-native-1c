@@ -267,8 +267,8 @@ impl Variant {
             | VariableType::VTYPE_UI2
             | VariableType::VTYPE_UI4
             | VariableType::VTYPE_UI8
-            | VariableType::VTYPE_UINT
-            | VariableType::VTYPE_R4
+            | VariableType::VTYPE_UINT => Some(unsafe { self.value.ull_val as f64 }),
+            VariableType::VTYPE_R4
             | VariableType::VTYPE_R8 => Some(unsafe { self.value.dbl_val }),
             _ => None,
         }
